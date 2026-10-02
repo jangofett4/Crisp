@@ -142,6 +142,9 @@ Parser::DeclGroupPtrTy Parser::ParseNamespace(DeclaratorContext Context,
     // Normal namespace definition, not a nested-namespace-definition.
   } else if (InlineLoc.isValid()) {
     Diag(InlineLoc, diag::err_inline_nested_namespace_definition);
+  } else if (getLangOpts().CNamespaces && !getLangOpts().CPlusPlus) {
+    if (FirstNestedInlineLoc.isValid())
+      Diag(FirstNestedInlineLoc, diag::err_inline_nested_namespace_definition);
   } else if (getLangOpts().CPlusPlus20) {
     Diag(ExtraNSs[0].NamespaceLoc,
          diag::warn_cxx14_compat_nested_namespace_definition);
@@ -458,6 +461,12 @@ Parser::DeclGroupPtrTy Parser::ParseUsingDirectiveOrDeclaration(
         << FixItHint::CreateRemoval(TemplateLoc);
   }
 
+  if (getLangOpts().CNamespaces && !getLangOpts().CPlusPlus) {
+    Decl *UsingDir = ParseUsingDirective(Context, UsingLoc, DeclEnd, Attrs,
+                                         /*CNamespaceShorthand=*/true);
+    return Actions.ConvertDeclToDeclGroup(UsingDir);
+  }
+
   // 'using namespace' means this is a using-directive.
   if (Tok.is(tok::kw_namespace)) {
     // Template parameters are always an error here.
@@ -479,11 +488,14 @@ Parser::DeclGroupPtrTy Parser::ParseUsingDirectiveOrDeclaration(
 Decl *Parser::ParseUsingDirective(DeclaratorContext Context,
                                   SourceLocation UsingLoc,
                                   SourceLocation &DeclEnd,
-                                  ParsedAttributes &attrs) {
-  assert(Tok.is(tok::kw_namespace) && "Not 'namespace' token");
+                                  ParsedAttributes &attrs,
+                                  bool CNamespaceShorthand) {
+  assert((CNamespaceShorthand || Tok.is(tok::kw_namespace)) &&
+         "Not 'namespace' token");
 
-  // Eat 'namespace'.
-  SourceLocation NamespcLoc = ConsumeToken();
+  // Eat 'namespace' in the C++ spelling of a using-directive.
+  SourceLocation NamespcLoc =
+      CNamespaceShorthand ? SourceLocation() : ConsumeToken();
 
   if (Tok.is(tok::code_completion)) {
     cutOffParsing();
@@ -1768,7 +1780,7 @@ void Parser::ParseClassSpecifier(tok::TokenKind TagTokKind,
   CXXScopeSpec &SS =
       DS.hasTypeSpecifier() ? InvalidDeclScope : DS.getTypeSpecScope();
   // Parse the (optional) nested-name-specifier.
-  if (getLangOpts().CPlusPlus) {
+  if (getLangOpts().CPlusPlus || getLangOpts().CNamespaces) {
     // "FOO : BAR" is not a potential typo for "FOO::BAR".  In this context it
     // is a base-specifier-list.
     ColonProtectionRAIIObject X(*this);

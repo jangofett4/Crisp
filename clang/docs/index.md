@@ -13,6 +13,7 @@ ReleaseNotes
 UsersManual
 Toolchain
 LanguageExtensions
+CNamespaces
 ClangCommandLineReference
 AttributeReference
 DiagnosticsReference

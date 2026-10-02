@@ -1998,7 +1998,7 @@ bool Parser::TryAnnotateTypeOrScopeToken(
   bool WasScopeAnnotation = Tok.is(tok::annot_cxxscope);
 
   CXXScopeSpec SS;
-  if (getLangOpts().CPlusPlus)
+  if (getLangOpts().CPlusPlus || getLangOpts().CNamespaces)
     if (ParseOptionalCXXScopeSpecifier(
             SS, /*ObjectType=*/nullptr,
             /*ObjectHasErrors=*/false,
@@ -2057,7 +2057,7 @@ bool Parser::TryAnnotateTypeOrScopeTokenAfterScopeSpec(
       return false;
     }
 
-    if (!getLangOpts().CPlusPlus) {
+    if (!getLangOpts().CPlusPlus && !getLangOpts().CNamespaces) {
       // If we're in C, the only place we can have :: tokens is C23
       // attribute which is parsed elsewhere. If the identifier is not a type,
       // then it can't be scope either, just early exit.
@@ -2128,7 +2128,7 @@ bool Parser::TryAnnotateTypeOrScopeTokenAfterScopeSpec(
 }
 
 bool Parser::TryAnnotateCXXScopeToken(bool EnteringContext) {
-  assert(getLangOpts().CPlusPlus &&
+  assert((getLangOpts().CPlusPlus || getLangOpts().CNamespaces) &&
          "Call sites of this function should be guarded by checking for C++");
   assert(MightBeCXXScopeToken() && "Cannot be a type or scope token!");
 

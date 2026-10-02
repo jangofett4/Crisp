@@ -51,6 +51,7 @@ LANGOPT(MSAnonymousStructs, 1, 0, NotCompatible, "Microsoft anonymous struct and
 LANGOPT(AsmBlocks         , 1, 0, NotCompatible, "Microsoft inline asm blocks")
 LANGOPT(Borland           , 1, 0, NotCompatible, "Borland extensions")
 LANGOPT(CPlusPlus         , 1, 0, NotCompatible, "C++")
+LANGOPT(CNamespaces       , 1, 0, NotCompatible, "C namespaces")
 LANGOPT(CPlusPlus11       , 1, 0, NotCompatible, "C++11")
 LANGOPT(CPlusPlus14       , 1, 0, NotCompatible, "C++14")
 LANGOPT(CPlusPlus17       , 1, 0, NotCompatible, "C++17")

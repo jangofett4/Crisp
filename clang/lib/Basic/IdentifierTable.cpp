@@ -288,6 +288,11 @@ void IdentifierTable::AddKeywords(const LangOptions &LangOpts) {
 #define TESTING_KEYWORD(NAME, FLAGS)
 #include "clang/Basic/TokenKinds.def"
 
+  if (LangOpts.CNamespaces) {
+    AddKeyword("namespace", tok::kw_namespace, KEYALL, LangOpts, *this);
+    AddKeyword("using", tok::kw_using, KEYALL, LangOpts, *this);
+  }
+
   if (LangOpts.ParseUnknownAnytype)
     AddKeyword("__unknown_anytype", tok::kw___unknown_anytype, KEYALL,
                LangOpts, *this);

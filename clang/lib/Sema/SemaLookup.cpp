@@ -303,6 +303,11 @@ static inline unsigned getIDNS(Sema::LookupNameKind NameKind,
 void LookupResult::configure() {
   IDNS = getIDNS(LookupKind, getSema().getLangOpts().CPlusPlus,
                  isForRedeclaration());
+  if (getSema().getLangOpts().CNamespaces &&
+      !getSema().getLangOpts().CPlusPlus &&
+      (LookupKind == Sema::LookupOrdinaryName ||
+       LookupKind == Sema::LookupRedeclarationWithLinkage))
+    IDNS |= Decl::IDNS_Namespace;
 
   // If we're looking for one of the allocation or deallocation
   // operators, make sure that the implicitly-declared new and delete
@@ -2306,6 +2311,48 @@ bool Sema::LookupName(LookupResult &R, Scope *S, bool AllowBuiltinCreation,
 
         return true;
       }
+
+    if (getLangOpts().CNamespaces &&
+        (NameKind == LookupOrdinaryName ||
+         NameKind == LookupRedeclarationWithLinkage ||
+         NameKind == LookupTagName || NameKind == LookupNamespaceName)) {
+      // C's identifier resolver only tracks the active lexical scope.  A
+      // reopened namespace also needs declarations from earlier definitions.
+      for (DeclContext *DC = CurContext; DC; DC = DC->getParent()) {
+        if (!isa<NamespaceDecl>(DC))
+          continue;
+        LookupQualifiedName(R, DC);
+        if (!R.empty())
+          return true;
+      }
+    }
+
+    if (getLangOpts().CNamespaces &&
+        (NameKind == LookupOrdinaryName || NameKind == LookupTagName ||
+         NameKind == LookupNamespaceName)) {
+      llvm::SmallPtrSet<const UsingDirectiveDecl *, 8> Seen;
+      for (Scope *Cur = S; Cur; Cur = Cur->getParent()) {
+        auto LookupImported = [&](UsingDirectiveDecl *UD) {
+          if (!Seen.insert(UD).second)
+            return;
+          LookupResult Imported(*this, Name, R.getNameLoc(), NameKind);
+          LookupQualifiedName(Imported, UD->getNominatedNamespace());
+          for (NamedDecl *D : Imported)
+            if (NamedDecl *Accepted = R.getAcceptableDecl(D))
+              R.addDecl(Accepted);
+        };
+        for (UsingDirectiveDecl *UD : Cur->using_directives())
+          LookupImported(UD);
+        if (DeclContext *DC = Cur->getEntity())
+          if (DC->isTranslationUnit() || isa<NamespaceDecl>(DC))
+            for (UsingDirectiveDecl *UD : DC->using_directives())
+              LookupImported(UD);
+        if (!R.empty()) {
+          R.resolveKind();
+          return true;
+        }
+      }
+    }
   } else {
     // Perform C++ unqualified name lookup.
     if (CppLookupName(R, S))

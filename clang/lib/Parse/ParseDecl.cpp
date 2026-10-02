@@ -11,6 +11,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "clang/AST/ASTContext.h"
+#include "clang/AST/DeclCXX.h"
 #include "clang/AST/DeclTemplate.h"
 #include "clang/AST/PrettyDeclStackTrace.h"
 #include "clang/Basic/AddressSpaces.h"
@@ -1971,6 +1972,25 @@ Parser::DeclGroupPtrTy Parser::ParseSimpleDeclaration(
   DeclSpecContext DSContext = getDeclSpecContextFromDeclaratorContext(Context);
   ParseDeclarationSpecifiers(DS, TemplateInfo, AS_none, DSContext);
 
+  // In C namespace mode, `typedef struct name;` introduces the ordinary C
+  // typedef name for the tag.  Synthesize the otherwise required declarator
+  // so the usual C typedef path handles its type and redeclarations.
+  if (getLangOpts().CNamespaces && !getLangOpts().CPlusPlus &&
+      isa<NamespaceDecl>(Actions.CurContext) && Tok.is(tok::semi) &&
+      DS.getStorageClassSpec() == DeclSpec::SCS_typedef &&
+      DS.getTypeSpecType() == DeclSpec::TST_struct) {
+    if (auto *RD = dyn_cast_or_null<RecordDecl>(DS.getRepAsDecl())) {
+      if (IdentifierInfo *II = RD->getIdentifier()) {
+        PP.EnterToken(Tok, /*IsReinject=*/true);
+        Tok.startToken();
+        Tok.setKind(tok::identifier);
+        Tok.setIdentifierInfo(II);
+        Tok.setLocation(DS.getTypeSpecTypeNameLoc());
+        Tok.setLength(II->getLength());
+      }
+    }
+  }
+
   // If we had a free-standing type definition with a missing semicolon, we
   // may get this far before the problem becomes obvious.
   if (DS.hasTagDefinition() &&
@@ -3284,7 +3304,7 @@ Parser::DiagnoseMissingSemiAfterTagDefinition(DeclSpec &DS, AccessSpecifier AS,
   bool EnteringContext = (DSContext == DeclSpecContext::DSC_class ||
                           DSContext == DeclSpecContext::DSC_top_level);
 
-  if (getLangOpts().CPlusPlus &&
+  if ((getLangOpts().CPlusPlus || getLangOpts().CNamespaces) &&
       (Tok.isOneOf(tok::identifier, tok::coloncolon, tok::kw_decltype) ||
        (Tok.is(tok::annot_template_id) && NextToken().is(tok::coloncolon))) &&
       TryAnnotateCXXScopeToken(EnteringContext)) {
@@ -3566,7 +3586,7 @@ void Parser::ParseDeclarationSpecifiers(
 
     case tok::coloncolon: // ::foo::bar
       // C++ scope specifier.  Annotate and loop, or bail out on error.
-      if (getLangOpts().CPlusPlus &&
+      if ((getLangOpts().CPlusPlus || getLangOpts().CNamespaces) &&
           TryAnnotateCXXScopeToken(EnteringContext)) {
         if (!DS.hasTypeSpecifier())
           DS.SetTypeSpecError();
@@ -3611,7 +3631,8 @@ void Parser::ParseDeclarationSpecifiers(
         //
         // To improve diagnostics for this case, parse the declaration as a
         // constructor (and reject the extra template arguments later).
-        if ((DSContext == DeclSpecContext::DSC_top_level ||
+        if (getLangOpts().CPlusPlus &&
+            (DSContext == DeclSpecContext::DSC_top_level ||
              DSContext == DeclSpecContext::DSC_class) &&
             TemplateId->Name &&
             Actions.isCurrentClassName(*TemplateId->Name, getCurScope(), &SS) &&
@@ -3672,7 +3693,8 @@ void Parser::ParseDeclarationSpecifiers(
       // Check whether this is a constructor declaration. If we're in a
       // context where the identifier could be a class name, and it has the
       // shape of a constructor declaration, process it as one.
-      if ((DSContext == DeclSpecContext::DSC_top_level ||
+      if (getLangOpts().CPlusPlus &&
+          (DSContext == DeclSpecContext::DSC_top_level ||
            DSContext == DeclSpecContext::DSC_class) &&
           Actions.isCurrentClassName(*Next.getIdentifierInfo(), getCurScope(),
                                      &SS) &&
@@ -3808,7 +3830,7 @@ void Parser::ParseDeclarationSpecifiers(
 
       // In C++, check to see if this is a scope specifier like foo::bar::, if
       // so handle it as such.  This is important for ctor parsing.
-      if (getLangOpts().CPlusPlus) {
+      if (getLangOpts().CPlusPlus || getLangOpts().CNamespaces) {
         // C++20 [temp.spec] 13.9/6.
         // This disables the access checking rules for function template
         // explicit instantiation and explicit specialization:
@@ -5154,7 +5176,7 @@ void Parser::ParseEnumSpecifier(SourceLocation StartLoc, DeclSpec &DS,
   CXXScopeSpec InvalidDeclScope;
   CXXScopeSpec &SS =
       DS.hasTypeSpecifier() ? InvalidDeclScope : DS.getTypeSpecScope();
-  if (getLangOpts().CPlusPlus) {
+  if (getLangOpts().CPlusPlus || getLangOpts().CNamespaces) {
     // "enum foo : bar;" is not a potential typo for "enum foo::bar;".
     ColonProtectionRAIIObject X(*this);
 
@@ -6048,6 +6070,16 @@ bool Parser::isDeclarationSpecifier(
   }
 
   case tok::annot_cxxscope: {
+    if (getLangOpts().CNamespaces && !getLangOpts().CPlusPlus &&
+        NextToken().is(tok::identifier)) {
+      CXXScopeSpec SS;
+      Actions.RestoreNestedNameSpecifierAnnotation(
+          Tok.getAnnotationValue(), Tok.getAnnotationRange(), SS);
+      const Token &Name = NextToken();
+      if (Actions.getTypeName(*Name.getIdentifierInfo(), Name.getLocation(),
+                              getCurScope(), &SS))
+        return true;
+    }
     TemplateIdAnnotation *TemplateId =
         NextToken().is(tok::annot_template_id)
             ? takeTemplateIdAnnotation(NextToken())

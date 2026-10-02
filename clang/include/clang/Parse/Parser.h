@@ -480,7 +480,7 @@ public:
   bool TryAnnotateCXXScopeToken(bool EnteringContext = false);
 
   bool MightBeCXXScopeToken() {
-    return getLangOpts().CPlusPlus &&
+    return (getLangOpts().CPlusPlus || getLangOpts().CNamespaces) &&
            (Tok.is(tok::identifier) || Tok.is(tok::coloncolon) ||
             (Tok.is(tok::annot_template_id) &&
              NextToken().is(tok::coloncolon)) ||
@@ -3309,7 +3309,8 @@ private:
   /// \endverbatim
   ///
   Decl *ParseUsingDirective(DeclaratorContext Context, SourceLocation UsingLoc,
-                            SourceLocation &DeclEnd, ParsedAttributes &attrs);
+                            SourceLocation &DeclEnd, ParsedAttributes &attrs,
+                            bool CNamespaceShorthand = false);
 
   struct UsingDeclarator {
     SourceLocation TypenameLoc;
@@ -7790,6 +7791,8 @@ public:
   bool isDeclarationStatement(bool DisambiguatingWithExpression = false) {
     if (getLangOpts().CPlusPlus)
       return isCXXDeclarationStatement(DisambiguatingWithExpression);
+    if (getLangOpts().CNamespaces && Tok.is(tok::kw_using))
+      return true;
     return isDeclarationSpecifier(ImplicitTypenameContext::No, true);
   }
 

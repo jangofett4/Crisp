@@ -2532,6 +2532,28 @@ static std::string getMangledNameImpl(CodeGenModule &CGM, GlobalDecl GD,
                                       bool OmitMultiVersionMangling = false) {
   SmallString<256> Buffer;
   llvm::raw_svector_ostream Out(Buffer);
+  // C namespaces change a declaration's link name, but do not change its
+  // function type or calling convention.  Encode only namespace components
+  // and the C identifier so declarations in separate C translation units
+  // receive the same symbol.
+  if (CGM.getLangOpts().CNamespaces && !CGM.getLangOpts().CPlusPlus &&
+      !ND->hasAttr<AsmLabelAttr>() &&
+      (isa<FunctionDecl>(ND) || isa<VarDecl>(ND))) {
+    llvm::SmallVector<const NamespaceDecl *, 4> Namespaces;
+    for (const DeclContext *DC = ND->getDeclContext();
+         const auto *NS = dyn_cast<NamespaceDecl>(DC); DC = NS->getParent())
+      Namespaces.push_back(NS);
+    if (!Namespaces.empty()) {
+      Out << "_CNS";
+      for (const NamespaceDecl *NS : llvm::reverse(Namespaces)) {
+        StringRef Name = NS->getName();
+        Out << Name.size() << Name;
+      }
+      StringRef Name = ND->getName();
+      Out << Name.size() << Name;
+      return std::string(Out.str());
+    }
+  }
   MangleContext &MC = CGM.getCXXABI().getMangleContext();
   if (!CGM.getModuleNameHash().empty())
     MC.needsUniqueInternalLinkageNames();

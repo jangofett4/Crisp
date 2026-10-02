@@ -109,7 +109,7 @@ bool Parser::ParseOptionalCXXScopeSpecifier(
     bool EnteringContext, bool *MayBePseudoDestructor, bool IsTypename,
     const IdentifierInfo **LastII, bool OnlyNamespace, bool InUsingDeclaration,
     bool Disambiguation, bool IsAddressOfOperand, bool IsInDeclarationContext) {
-  assert(getLangOpts().CPlusPlus &&
+  assert((getLangOpts().CPlusPlus || getLangOpts().CNamespaces) &&
          "Call sites of this function should be guarded by checking for C++");
 
   if (Tok.is(tok::annot_cxxscope)) {

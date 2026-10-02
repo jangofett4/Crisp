@@ -7613,6 +7613,8 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
                    IsWindowsMSVC || IsUEFI))
     CmdArgs.push_back("-fms-extensions");
 
+  Args.AddLastArg(CmdArgs, options::OPT_fc_namespaces);
+
   // -fms-compatibility=0 is default.
   bool IsMSVCCompat = Args.hasFlag(
       options::OPT_fms_compatibility, options::OPT_fno_ms_compatibility,
