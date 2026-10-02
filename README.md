@@ -1,3 +1,45 @@
+# Crisp
+
+Crisp is an experimental Clang fork for people who like C's directness but
+want better developer ergonomics. The aim is to add a small set of opt-in
+language features while keeping C's types, calling conventions, and runtime
+model recognizable. It is a proof of concept, not a new C standard or a
+production-ready compiler.
+
+The first implemented feature is **C namespaces**. With `-fc-namespaces`, C
+code can declare nested namespaces, use qualified names such as
+`std::math::vector3i`, and import names into a scope with `using std::math;`.
+Namespaced functions and variables get distinct linker symbols while retaining
+C calling conventions. See the [namespace documentation](clang/docs/CNamespaces.md)
+for syntax and build examples.
+
+Ideas for later experiments include a `defer` statement, monomorphic templates,
+and scoped enums when a header is brought in with `#import`. Those features
+are **not implemented**. The immediate goal is to see whether namespaces make
+for a useful, coherent C extension before expanding the experiment.
+
+## Authorship and review
+
+**The Clang/LLVM modifications in Crisp so far were generated and implemented
+by OpenAI Codex, an LLM assistant, at the project owner's direction. They were
+not written by the project owner.** The owner has tested the namespace proof
+of concept, but has not yet personally audited the compiler changes. The plan
+is to study the Clang/LLVM source and write or revise the implementation
+personally if the proof of concept is worth pursuing. Please treat the current
+changes as experimental and review them accordingly.
+
+## Build and try the namespace proof of concept
+
+From the repository root, with CMake and Ninja installed:
+
+```sh
+cmake -S llvm -B build -G Ninja -DLLVM_ENABLE_PROJECTS=clang -DLLVM_TARGETS_TO_BUILD=X86
+cmake --build build --target clang
+build/bin/clang -std=c11 -fc-namespaces your_file.c -o your_program
+```
+
+---
+
 # The LLVM Compiler Infrastructure
 
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/llvm/llvm-project/badge)](https://securityscorecards.dev/viewer/?uri=github.com/llvm/llvm-project)
